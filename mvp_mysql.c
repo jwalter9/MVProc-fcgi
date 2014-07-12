@@ -108,38 +108,30 @@ size_t setUserVar(const char *n, const char *p, char *q){
 
 mvproc_table *getDBResult(const mvproc_config *cfg, mvp_req_rec *r, int *errback){
 
-    if(r->uri == NULL || strlen(r->uri) > 65){
-        perror_f("Request for impossible content: %s\n",
-            r->uri ? r->uri : "(null)");
-        *errback = DECLINED;
-        return NULL;
-    };
     MYSQL *mysql = cfg->mysql_connect;
     MYSQL_RES *result;
     MYSQL_ROW row;
 	modmvproc_cache *cache_entry = NULL;
 	size_t qsize = 0, pos = 0;
-    char procname[65];
+    char *procname = (char *)mvp_alloc(r->pool, strlen(r->uri) + 1);
     if(r->uri[0] == '/')
         strcpy(procname, r->uri + 1);
     else
         strcpy(procname, r->uri);
-    if(procname[0] == '\0'){
-        if(cfg->default_proc == NULL){
-            strcpy(procname, "landing");
-        }else{
-            strcpy(procname, cfg->default_proc);
-        };
-    };
 
     if(cfg->cache != NULL){
         cache_entry = cfg->cache;
         while(cache_entry != NULL){
             if(strcmp(cache_entry->procname,procname) == 0) break;
             if(cache_entry->next == NULL){
-                perror_f("Request for unknown content: %s\n", procname);
-                *errback = DECLINED;
-                return NULL;
+                if(cfg->default_proc == NULL){
+                    procname = (char *)mvp_alloc(r->pool, 8);
+                    strcpy(procname, "landing");
+                }else{
+                    procname = (char *)mvp_alloc(r->pool, strlen(cfg->default_proc) + 1);
+                    strcpy(procname, cfg->default_proc);
+                };
+                break;
             };
             cache_entry = cache_entry->next;
         };
@@ -170,9 +162,26 @@ mvproc_table *getDBResult(const mvproc_config *cfg, mvp_req_rec *r, int *errback
         result = mysql_store_result(mysql);
         if(mysql_num_rows(result) < 1){
             mysql_free_result(result);
-            perror_f("Request for unknown content: %s\n",procname);
-            *errback = DECLINED;
-            return NULL;
+            if(cfg->default_proc == NULL){
+                procname = (char *)mvp_alloc(r->pool, 8);
+                strcpy(procname, "landing");
+            }else{
+                procname = (char *)mvp_alloc(r->pool, strlen(cfg->default_proc) + 1);
+                strcpy(procname, cfg->default_proc);
+            };
+            qsize = 85 + strlen(mysql->db) + strlen(procname);
+            proc_query = (char *)mvp_alloc(r->pool, qsize);
+            sprintf(proc_query, 
+                "SELECT name, param_list FROM mysql.proc WHERE db='%s' AND type='PROCEDURE' AND name='%s'",
+                mysql->db, procname);
+            if(mysql_real_query(mysql,proc_query,strlen(proc_query)) != 0){
+                return error_out(cfg, r->pool, mysql_error(mysql));
+            };
+            result = mysql_store_result(mysql);
+            if(mysql_num_rows(result) < 1){
+                mysql_free_result(result);
+                return error_out(cfg, r->pool, "Configuration error: No default proc?");
+            };
         };
         row = mysql_fetch_row(result);
         if(row == NULL){

@@ -144,8 +144,11 @@ GRANT EXECUTE ON `bar`.* TO 'foo'@'localhost';
             It's not required to set this in the configuration, as procedures 
             can set it as well. More on layouts later.
 
-        defaultProc (yourDefaultProc) – If set, this will be the procedure 
-            that's called when the request uri is '/' 
+        defaultProc (yourDefaultProc) - If set, this will be the procedure 
+            that's called when the request uri is '/' or if the uri does not 
+            match a procedure. A non-proc uri is allowed so pages can be given 
+            interesting urls like http://my.site.org/i-like-cheese
+            Do remember to handle possible non-proc uris in your default proc.
 
         cache (Y or N) – Y enables caching of procs AND templates. 
             Set to N during development and Y for production use. 
@@ -186,8 +189,7 @@ GRANT EXECUTE ON `bar`.* TO 'foo'@'localhost';
     like so: http://mysite.com/procname. If the uri is empty 
     (ie. nothing or '/' after the url), 
     a procedure either specified by the defaultProc configuration directive or 
-    'landing' will be looked for. If a procedure matching the name does not 
-    exist, MVProc will report a “403” error.
+    'landing' will be looked for. See defaultProc configuration directive.
 
     GET and POST requests are supported, as well as file uploads. 
     A file upload will be written to the configured uploadDirectory 
