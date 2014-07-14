@@ -22,8 +22,23 @@ void init_error(const char *fmt, const char *err){
     fclose(fp);
 }
 
-const char *set_template_dir(mvp_pool *p, mvproc_config *cfg, char *arg){
+const char *set_server_name(mvp_pool *p, mvproc_config *cfg, char *arg){
+    cfg->server_name = NULL;
+    cfg->next = NULL;
     if(arg == NULL) return NULL;
+    cfg->server_name = (char *)mvp_alloc(p, strlen(arg) + 1);
+    if(cfg->server_name == NULL) return "OUT OF MEMORY";
+    strcpy(cfg->server_name, arg);
+    size_t pos = strcspn(cfg->server_name, "]");
+    cfg->server_name[pos] = '\0';
+    return NULL;
+}
+
+const char *set_template_dir(mvp_pool *p, mvproc_config *cfg, char *arg){
+    if(arg == NULL){
+        cfg->template_dir = NULL;
+        return NULL;
+    };
     cfg->template_dir = (char *)mvp_alloc(p, strlen(arg) + 2);
     if(cfg->template_dir == NULL) return "OUT OF MEMORY";
     strcpy(cfg->template_dir, arg);
@@ -42,6 +57,7 @@ const char *set_db_group(mvp_pool *p, mvproc_config *cfg, char *arg){
 }
 
 const char *set_default_proc(mvp_pool *p, mvproc_config *cfg, char *arg){
+    cfg->default_proc = NULL;
     if(arg == NULL) return NULL;
     cfg->default_proc = (char *)mvp_alloc(p, strlen(arg) + 1);
     if(cfg->default_proc == NULL) return "OUT OF MEMORY";
@@ -58,8 +74,9 @@ const char *set_session(mvp_pool *p, mvproc_config *cfg, char *arg){
 }
 
 const char *maybe_build_cache(mvp_pool *p, mvproc_config *cfg, char *arg){
-    if(arg == NULL) return NULL;
-    if(arg[0] == 'N' || arg[0] == 'n') return NULL;
+    cfg->cache = NULL;
+    cfg->template_cache = NULL;
+    if(arg == NULL || arg[0] == 'N' || arg[0] == 'n') return NULL;
     const char *cv = NULL;
     if(arg[0] == 'Y' || arg[0] == 'y' || arg[0] == 'D' || arg[0] == 'd'){
         cv = build_cache(p, cfg);
@@ -88,6 +105,7 @@ const char *set_out_type(mvp_pool *p, mvproc_config *cfg, char *arg){
 }
 
 const char *set_error_tpl(mvp_pool *p, mvproc_config *cfg, char *arg){
+    cfg->error_tpl = NULL;
     if(arg == NULL) return NULL;
     cfg->error_tpl = (char *)mvp_alloc(p, strlen(arg) + 1);
     if(cfg->error_tpl == NULL) return "OUT OF MEMORY";
@@ -96,6 +114,7 @@ const char *set_error_tpl(mvp_pool *p, mvproc_config *cfg, char *arg){
 }
 
 const char *set_default_layout(mvp_pool *p, mvproc_config *cfg, char *arg){
+    cfg->default_layout = NULL;
     if(arg == NULL) return NULL;
     cfg->default_layout = (char *)mvp_alloc(p, strlen(arg) + 1);
     if(cfg->default_layout == NULL) return "OUT OF MEMORY";
@@ -104,6 +123,7 @@ const char *set_default_layout(mvp_pool *p, mvproc_config *cfg, char *arg){
 }
 
 const char *set_allow_setcontent(mvp_pool *p, mvproc_config *cfg, char *arg){
+    cfg->allow_setcontent = NULL;
     if(arg == NULL || (arg[0] != 'Y' && arg[0] != 'y')) return NULL;
     cfg->allow_setcontent = (char *)mvp_alloc(p, strlen(arg) + 1);
     if(cfg->allow_setcontent == NULL) return "OUT OF MEMORY";
@@ -150,9 +170,9 @@ const char *set_max_content(mvp_pool *p, mvproc_config *cfg, char *arg){
     return NULL;
 }
 
-char *get_arg(char *conf, const char *directive, mvp_pool *p){
+char *get_arg(char *conf, char *end, const char *directive, mvp_pool *p){
     char *arg = strstr(conf, directive);
-    if(arg == NULL) return NULL;
+    if(arg == NULL || arg >= end) return NULL;
     arg += strlen(directive);
     arg += strspn(arg, " \t\r\n");
     size_t sz = strcspn(arg, " \t\r\n");
@@ -170,70 +190,125 @@ mvproc_config *populate_config(mvp_pool *configPool){
         init_error("%s","Failed to allocate memory for configuration.\n");
         return NULL;
     };
-    char *content = (char *)calloc(10240, 1);
-    FILE *cf = fopen(CONFIG_LOCATION, "r");
-    fread(content, 10240, 1, cf);
+    mvproc_config *first = cfg;
+    
+    FILE *cf = fopen(CONFIG_LOCATION, "rb");
+    long sz;
+    if(cf == NULL){
+        init_error("%s","Failed to open config file for sizing.\n");
+        return NULL;
+    };
+    if(fseek(cf, 0L, SEEK_END)){
+        fclose(cf);
+        init_error("%s","Failed to get size of config file.\n");
+        return NULL;
+    };
+    sz = ftell(cf);
     fclose(cf);
+    if(sz == -1L){
+        init_error("No config file at %s.\n",CONFIG_LOCATION);
+        return NULL;
+    };
+    cf = fopen(CONFIG_LOCATION, "r");
+    if(cf == NULL){
+        init_error("%s","Failed to open config file for reading.\n");
+        return NULL;
+    };
+    char *content = (char *)malloc(sz + 1);
+    fread(content, sz, 1, cf);
+    fclose(cf);
+    content[sz] = '\0';
 
     const char *error;
-    error = set_db_group(configPool, cfg, 
-        get_arg(content, "dbGroup", configPool));
-    if(!error)
+    char *begin = content;
+    char *end;
+    
+    while(1){
+        begin = strstr(begin, "[server ");
+        if(begin){
+            end = strstr(begin + 7, "[server ");
+            if(!end) end = begin + strlen(begin);
+        }else{
+            end = begin + strlen(begin);
+        };
+
+        error = set_server_name(configPool, cfg, 
+            get_arg(begin, end, "[server ", configPool));
+        if(!error)
+        error = set_db_group(configPool, cfg, 
+            get_arg(begin, end, "dbGroup", configPool));
+        if(!error)
         error = set_default_proc(configPool, cfg, 
-            get_arg(content, "defaultProc", configPool));
-    if(!error)
+            get_arg(begin, end, "defaultProc", configPool));
+        if(!error)
         error = set_session(configPool, cfg, 
-            get_arg(content, "session", configPool));
-    if(!error)
+            get_arg(begin, end, "session", configPool));
+        if(!error)
         error = set_template_dir(configPool, cfg, 
-            get_arg(content, "templateDir", configPool));
-    if(!error)
+            get_arg(begin, end, "templateDir", configPool));
+        if(!error)
         error = set_default_layout(configPool, cfg, 
-            get_arg(content, "defaultLayout", configPool));
-    if(!error)
+            get_arg(begin, end, "defaultLayout", configPool));
+        if(!error)
         error = set_error_tpl(configPool, cfg, 
-            get_arg(content, "errTemplate", configPool));
-    if(!error)
+            get_arg(begin, end, "errTemplate", configPool));
+        if(!error)
         error = maybe_build_cache(configPool, cfg, 
-            get_arg(content, "cache", configPool));
-    if(!error)
+            get_arg(begin, end, "cache", configPool));
+        if(!error)
         error = set_out_type(configPool, cfg, 
-            get_arg(content, "outputStyle", configPool));
-    if(!error)
+            get_arg(begin, end, "outputStyle", configPool));
+        if(!error)
         error = set_allow_setcontent(configPool, cfg, 
-            get_arg(content, "allowSetContent", configPool));
-    if(!error)
+            get_arg(begin, end, "allowSetContent", configPool));
+        if(!error)
         error = set_allow_html_chars(configPool, cfg, 
-            get_arg(content, "allowHTMLfromDB", configPool));
-    if(!error)
+            get_arg(begin, end, "allowHTMLfromDB", configPool));
+        if(!error)
         error = set_upload_dir(configPool, cfg, 
-            get_arg(content, "uploadDirectory", configPool));
-    if(!error)
+            get_arg(begin, end, "uploadDirectory", configPool));
+        if(!error)
         error = set_max_content(configPool, cfg, 
-            get_arg(content, "maxPostSize", configPool));
-    if(error){
-        init_error("Configuration error: %s\n", error);
-        return NULL;
+            get_arg(begin, end, "maxPostSize", configPool));
+        if(error){
+            init_error("Configuration error: %s\n", error);
+            return NULL;
+        };
+        
+        if(end[0] != '[') break;
+
+        cfg->next = (mvproc_config *)mvp_alloc(configPool, sizeof(mvproc_config));
+        if(cfg->next == NULL){
+            init_error("%s","Failed to allocate memory for config.\n");
+            return NULL;
+        };
+        cfg = cfg->next;
+        begin = end;
     };
     free(content);
+    
+    cfg = first;
 
-    cfg->mysql_connect = (MYSQL *)mvp_alloc(configPool, sizeof(MYSQL));
-    if(cfg->mysql_connect == NULL){
-        init_error("%s","Failed alloc for mysql\n");
-        return NULL;
-    };
-    mysql_init(cfg->mysql_connect);
-    if(mysql_options(cfg->mysql_connect, 
-        MYSQL_READ_DEFAULT_GROUP, cfg->group) != 0){
-        init_error("%s","MYSQL Options Failed\n");
-        return NULL;
-    };
-    if(mysql_real_connect(cfg->mysql_connect, 
-        NULL, NULL, NULL, NULL, 0, NULL, CLIENT_MULTI_STATEMENTS) == NULL){
-        init_error("MYSQL Connect Error: %s\n", 
-            mysql_error(cfg->mysql_connect));
-        return NULL;
+    while(cfg){
+        cfg->mysql_connect = (MYSQL *)mvp_alloc(configPool, sizeof(MYSQL));
+        if(cfg->mysql_connect == NULL){
+            init_error("%s","Failed alloc for mysql\n");
+            return NULL;
+        };
+        mysql_init(cfg->mysql_connect);
+        if(mysql_options(cfg->mysql_connect, 
+            MYSQL_READ_DEFAULT_GROUP, cfg->group) != 0){
+            init_error("MYSQL Options Failed for group %s\n", cfg->group);
+            return NULL;
+        };
+        if(mysql_real_connect(cfg->mysql_connect, 
+            NULL, NULL, NULL, NULL, 0, NULL, CLIENT_MULTI_STATEMENTS) == NULL){
+            init_error("MYSQL Connect Error: %s\n", 
+                mysql_error(cfg->mysql_connect));
+            return NULL;
+        };
+        cfg = cfg->next;
     };
     
-    return cfg;
+    return first;
 }

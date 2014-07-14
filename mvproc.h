@@ -172,7 +172,7 @@ typedef struct template_cache_t {
     struct template_cache_t *next;
 } template_cache_t;
 
-typedef struct {
+typedef struct mvproc_config {
 	char session;
 	char *group;
 	char *template_dir;
@@ -187,6 +187,8 @@ typedef struct {
 	char *default_proc;
 	MYSQL *mysql_connect;
 	long max_content_length;
+	char *server_name;
+	struct mvproc_config *next;
 } mvproc_config;
 
 typedef struct {

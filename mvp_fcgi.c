@@ -455,6 +455,15 @@ mvp_req_rec *get_request(const mvproc_config *cfg){
             sprintf(&elem[strlen(elem)],"%d",rand());
             r->session = hash_cookie(r->pool, elem, strlen(elem));
         };
+    }else{
+        r->session = (char *)mvp_alloc(r->pool, 1);
+        if(r->session == NULL){
+            perror("Failed to allocate one byte for empty session\n");
+            mvp_free(r->pool);
+            free(r);
+            return NULL;
+        };
+        r->session[0] = '\0';
     };
     
     mvp_in_param *parm = get_new_param(r->pool);
@@ -590,11 +599,20 @@ mvp_req_rec *get_request(const mvproc_config *cfg){
 
 int main(void){
     mvp_pool *configPool = get_new_pool();
-    mvproc_config *cfg = populate_config(configPool);
-    if(cfg == NULL) return 1;
+    mvproc_config *first = populate_config(configPool);
+    if(first == NULL) return 1;
+    mvproc_config *cfg;
     
     while(FCGI_Accept() >= 0){
+        cfg = first;
+        char *srv = getenv("SERVER_NAME");
+        while(srv && cfg->next){
+            if(strcmp(cfg->server_name, srv) == 0) break;
+            else cfg = cfg->next;
+        };
+        
         mvp_req_rec *r = get_request(cfg);
+
         if(r == NULL){
             printf("Status: 500\r\n\r\n");
             continue;

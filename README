@@ -93,22 +93,49 @@ I couldn't get things to work fully on nginx
         }
 
 The above configurations send all requests not matching a file to mvproc_fcgi. 
-This is important for implementing MVProc-FCGI because the URI must match the 
-name of a stored procedure (ie. http://yoursite.org/MyProc).
 
-        There are twelve (12) configuration directives for mod_mvproc:
+--mvproc.conf--
 
-        session (Y or N) – sets session behavior. If sessions are enabled (Y), 
-            MVProc will supply called stored procedures with a user variable 
-            @mvp_session, which will contain a 32 character session id. 
-            A cookie will be produced and maintained with this id as its value. 
-            The procedure may set the @mvp_session value, which will update the 
-            value of the cookie. The value is also included in the output of 
-            the call in the PROC_OUT section.
+    The default location for mvproc_fcgi is /etc/mvproc.conf
+    Format for the file is [directive][whitespace][value]
+    For example:
+        session Y
+        dbGroup mydb
+        templateDir /where/the/templates/are
+        ...etc...
+        
+    If you need to serve multiple sites (for example, a site at port 80 and an
+    admin site at admin.mysite.com:443), the config file can be written like:
+        [server admin.mysite.com]
+        session Y
+        ...etc...
+        
+        [server mysite.com]
+        session N
+        ...etc...
+        
+    The last server defined will be the default, being used if no other sites
+    match the SERVER_NAME sent from the webserver, so the last server could 
+    always be written [server *] - documentation or experimentation will reveal
+    what your web server sends in the SERVER_NAME environment variable.
+    
+    The syntax MUST be [server {name}] - server in all lowercase.
+    When multiple servers are defined, each instance of mvproc_fcgi will keep
+    configurations for each, including different database connections.
 
-        dbGroup (yourDBgroup) – this is the group in mysql's my.cnf file which 
-            MVProc will use to authenticate and connect to the database. 
-            An example:
+    There are twelve (12) configuration directives for mvproc_fcgi:
+
+    session (Y or N) – sets session behavior. If sessions are enabled (Y), 
+        MVProc will supply called stored procedures with a user variable 
+        @mvp_session, which will contain a 32 character session id. 
+        A cookie will be produced and maintained with this id as its value. 
+        The procedure may set the @mvp_session value, which will update the 
+        value of the cookie. The value is also included in the output of 
+        the call in the PROC_OUT section.
+
+    dbGroup (yourDBgroup) – this is the group in mysql's my.cnf file which 
+        MVProc will use to authenticate and connect to the database. 
+        An example:
 [mydb] 
 host     = localhost
 port     = 3306
@@ -116,72 +143,72 @@ user     = myuser
 password = mypass 
 database = webdb
 
-            Please refer to the MySQL documentation for my.cnf subtleties.
-            Do consider that my.cnf is accessible. Best practice is to create 
-            a user (let's say 'foo'@'localhost') for an MVProc database 
-            (let's say `bar`) and grant only minimal access. Most of the time, 
-            this would be:
+        Please refer to the MySQL documentation for my.cnf subtleties.
+        Do consider that my.cnf is accessible. Best practice is to create 
+        a user (let's say 'foo'@'localhost') for an MVProc database 
+        (let's say `bar`) and grant only minimal access. Most of the time, 
+        this would be:
             
 GRANT SELECT (`name`,`param_list`,`db`,`type`) 
     ON `mysql`.`proc` TO 'foo'@'localhost';
 (The above is the minimum required permission for MVProc to work at all.)
 GRANT EXECUTE ON `bar`.* TO 'foo'@'localhost';
 
-            The procedure will run with the permissions of its DEFINER 
-            (see mysql documentation).
+        The procedure will run with the permissions of its DEFINER 
+        (see mysql documentation).
 
 
-        templateDir (/your/template/directory) – the location of the templates. 
-            This is best placed  outside the doc root – in fact, if the 
-            template files are in the doc root Apache (and maybe others) will 
-            get confused, thinking it should serve the file instead of allowing 
-            MVProc to handle the transaction. If templateDir is not set, or set 
-            with an empty string, templates and layouts will not be used. 
-            More on templates later.
+    templateDir (/your/template/directory) – the location of the templates. 
+        This is best placed  outside the doc root – in fact, if the 
+        template files are in the doc root Apache (and maybe others) will 
+        get confused, thinking it should serve the file instead of allowing 
+        MVProc to handle the transaction. If templateDir is not set, or set 
+        with an empty string, templates and layouts will not be used. 
+        More on templates later.
 
-        defaultLayout (yourLayoutTemplate – leave off the '.tpl') – If set, 
-            this will set the @mvp_layout session variable to a default value. 
-            It's not required to set this in the configuration, as procedures 
-            can set it as well. More on layouts later.
+    defaultLayout (yourLayoutTemplate – leave off the '.tpl') – If set, 
+        this will set the @mvp_layout session variable to a default value. 
+        It's not required to set this in the configuration, as procedures 
+        can set it as well. More on layouts later.
 
-        defaultProc (yourDefaultProc) - If set, this will be the procedure 
-            that's called when the request uri is '/' or if the uri does not 
-            match a procedure. A non-proc uri is allowed so pages can be given 
-            interesting urls like http://my.site.org/i-like-cheese
-            Do remember to handle possible non-proc uris in your default proc.
+    defaultProc (yourDefaultProc) - If set, this will be the procedure 
+        that's called when the request uri is '/' or if the uri does not 
+        match a procedure. A non-proc uri is allowed so pages can be given 
+        interesting urls like http://my.site.org/i-like-cheese
+        Do remember to handle possible non-proc uris in your default proc.
 
-        cache (Y or N) – Y enables caching of procs AND templates. 
-            Set to N during development and Y for production use. 
-            Also available are T – cache templates only, 
-            and D – cache database only.
+    cache (Y or N) – Y enables caching of procs AND templates. 
+        Set to N during development and Y for production use. 
+        Also available are T – cache templates only, 
+        and D – cache database only.
 
-        outputStyle (MIXED | PLAIN | JSON | EASY_XML | EASY_JSON) – 
-            see the Output section below.
+    outputStyle (MIXED | PLAIN | JSON | EASY_XML | EASY_JSON) – 
+        see the Output section below.
 
-        errTemplate – If templateDir is configured, this is the name of the 
-            template to render when there's a database error. 
-            The error can be accessed as <# status.error #>.
+    errTemplate – If templateDir is configured, this is the name of the 
+        template to render when there's a database error. 
+        The error can be accessed as <# status.error #>.
 
-        allowSetContent (Y or N) – provides @mvp_content_type session variable, 
-            which allows a procedure to tell the webserver how to set the 
-            Content-Type header.
+    allowSetContent (Y or N) – provides @mvp_content_type session variable, 
+        which allows a procedure to tell the webserver how to set the 
+        Content-Type header.
 
-        allowHTMLfromDB (Y or N) – default N, Y allows HTML output from the 
-            database to be rendered as HTML. By default, MVProc will convert 
-            '<' to '&lt;', '&' to '&quot;', etc. to prevent XXS and CSRF attacks.
+    allowHTMLfromDB (Y or N) – default N, Y allows HTML output from the 
+        database to be rendered as HTML. By default, MVProc will convert 
+        '<' to '&lt;', '&' to '&amp;', etc. to prevent XSS and CSRF attacks.
 
-        uploadDirectory - Sets the path to a directory where uploaded files are 
-            written. It is highly recommended that this path be OUTSIDE the 
-            docroot. If the path doesn't exist, MVProc will attempt to create 
-            it. Default value is /tmp 
+    uploadDirectory - Sets the path to a directory where uploaded files are 
+        written. It is highly recommended that this path be OUTSIDE the 
+        docroot. If the path doesn't exist, MVProc will attempt to create 
+        it. Default value is /tmp 
 
-        maxPostSize – Sets the maximum size for POST requests. Because FastCGI 
-            handler modules for various webservers generally will be 
-            configurable to filter over-large requests, it's better to let them 
-            handle that filtering. That being said, if you want to exceed the 
-            default value of 25MB, this will need to be set. 
-            Note: Currently, this value needs to be set in number of bytes. 
-            (25MB = 26214400 bytes)
+    maxPostSize – Sets the maximum size for POST requests. Because FastCGI 
+        handler modules for various webservers generally will be 
+        configurable to filter over-large requests, it's better to let them 
+        handle that filtering. That being said, if you want to exceed the 
+        default value of 25MB, this will need to be set. 
+        Note: Currently, this value needs to be set in number of bytes. 
+        (25MB = 26214400 bytes)
 
 --Requests--
 
