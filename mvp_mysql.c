@@ -123,17 +123,26 @@ mvproc_table *getDBResult(const mvproc_config *cfg, mvp_req_rec *r, int *errback
         cache_entry = cfg->cache;
         while(cache_entry != NULL){
             if(strcmp(cache_entry->procname,procname) == 0) break;
-            if(cache_entry->next == NULL){
-                if(cfg->default_proc == NULL){
-                    procname = (char *)mvp_alloc(r->pool, 8);
-                    strcpy(procname, "landing");
-                }else{
-                    procname = (char *)mvp_alloc(r->pool, strlen(cfg->default_proc) + 1);
-                    strcpy(procname, cfg->default_proc);
-                };
-                break;
-            };
             cache_entry = cache_entry->next;
+        };
+        if(cache_entry == NULL){
+            if(cfg->default_proc == NULL){
+              	procname = (char *)mvp_alloc(r->pool, 8);
+               	strcpy(procname, "landing");
+            }else{
+               	procname = (char *)mvp_alloc(r->pool, 
+               		strlen(cfg->default_proc) + 1);
+               	strcpy(procname, cfg->default_proc);
+            };
+            cache_entry = cfg->cache;
+            while(cache_entry != NULL){
+               	if(strcmp(cache_entry->procname,procname) == 0) break;
+               	cache_entry = cache_entry->next;
+            };
+            if(cache_entry == NULL){
+                perror_f("Request for unknown content: %s\n", procname);
+                return error_out(cfg, r->pool, "Request for unknown content");
+            };
         };
     }else{
         /* Development mode - NO CACHE */
