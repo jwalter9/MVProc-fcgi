@@ -172,6 +172,11 @@ typedef struct template_cache_t {
     struct template_cache_t *next;
 } template_cache_t;
 
+typedef struct user_var_t {
+	char *varname;
+	struct user_var_t *next;
+} user_var_t;
+
 typedef struct mvproc_config {
 	char session;
 	char *group;
@@ -189,6 +194,7 @@ typedef struct mvproc_config {
 	long max_content_length;
 	char *server_name;
 	struct mvproc_config *next;
+	user_var_t *user_vars;
 } mvproc_config;
 
 typedef struct {

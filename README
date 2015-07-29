@@ -123,7 +123,7 @@ The above configurations send all requests not matching a file to mvproc_fcgi.
     When multiple servers are defined, each instance of mvproc_fcgi will keep
     configurations for each, including different database connections.
 
-    There are twelve (12) configuration directives for mvproc_fcgi:
+    There are thirteen (13) configuration directives for mvproc_fcgi:
 
     session (Y or N) – sets session behavior. If sessions are enabled (Y), 
         MVProc will supply called stored procedures with a user variable 
@@ -209,6 +209,12 @@ GRANT EXECUTE ON `bar`.* TO 'foo'@'localhost';
         default value of 25MB, this will need to be set. 
         Note: Currently, this value needs to be set in number of bytes. 
         (25MB = 26214400 bytes)
+
+    userVars - a comma-delimited set of additional user vars to
+        make available for output from the procs. This is useful when
+        procs CALL each other and SET @mvp_template. Add no whitespace.
+        Example: mvprocUserVars err,inset_include,universal_out
+
 
 --Requests--
 

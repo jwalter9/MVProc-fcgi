@@ -253,6 +253,12 @@ mvproc_table *getDBResult(const mvproc_config *cfg, mvp_req_rec *r, int *errback
         param = param->next;
     };
     
+    user_var_t *uvar = cfg->user_vars;
+    while(uvar != NULL){
+    	    qsize += strlen(uvar->varname) * 2 + 21;
+    	    uvar = uvar->next;
+    };
+    
     pos = 0;
     char query[qsize];
     for(parm_ind = 0; parm_ind < cache_entry->num_params; parm_ind++){
@@ -291,6 +297,11 @@ mvproc_table *getDBResult(const mvproc_config *cfg, mvp_req_rec *r, int *errback
     pos += setUserVar("mvp_uri", r->uri, &query[pos]);
     pos += setUserVar("mvp_agent_id", r->agent, &query[pos]);
     pos += setUserVar("mvp_remoteip", r->useragent_ip, &query[pos]);
+    uvar = cfg->user_vars;
+    while(uvar != NULL){
+    	pos += setUserVar(uvar->varname, NULL, &query[pos]);
+    	uvar = uvar->next;
+    };
     
     sprintf(&query[pos], "CALL %s(",cache_entry->procname);
     pos = strlen(query);
@@ -353,6 +364,14 @@ mvproc_table *getDBResult(const mvproc_config *cfg, mvp_req_rec *r, int *errback
                 "%s@%s",qsize > 0 ? ", ":" SELECT ","mvp_content_type");
         pos = strlen(query);
         qsize++;
+    };
+
+    uvar = cfg->user_vars;
+    while(uvar != NULL){
+        sprintf(&query[pos],"%s@%s",qsize > 0 ? ", ":" SELECT ",uvar->varname);
+        pos = strlen(query);
+        qsize++;
+        uvar = uvar->next;
     };
     
     if(qsize > 0) sprintf(&query[pos],";");

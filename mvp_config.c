@@ -162,6 +162,33 @@ const char *set_upload_dir(mvp_pool *p, mvproc_config *cfg, char *arg){
     return NULL;
 }
 
+const char *set_user_vars(mvp_pool *p, mvproc_config *cfg, char *arg){
+	char *pos = arg;
+	size_t len = 0;
+	char *end = arg + strlen(arg);
+	user_var_t *uvar = (user_var_t *)mvp_alloc(p, sizeof(user_var_t));
+	if(uvar == NULL) return "OUT OF MEMORY";
+	cfg->user_vars = uvar;
+	while(pos < end){
+		len = strcspn(pos, ",");
+		if(len > 0){
+			uvar->varname = (char *)mvp_alloc(p, (len + 1) * sizeof(char));
+			if(uvar->varname == NULL) return "OUT OF MEMORY";
+			strncpy(uvar->varname, pos, len);
+			uvar->varname[len] = '\0';
+			pos += len + 1;
+			if(pos < end){
+				uvar->next = (user_var_t *)mvp_alloc(p, sizeof(user_var_t));
+				if(uvar->next == NULL) return "OUT OF MEMORY";
+				uvar = uvar->next;
+			}else{
+				uvar->next = NULL;
+			};
+		};
+	};
+	return NULL;
+}
+
 const char *set_max_content(mvp_pool *p, mvproc_config *cfg, char *arg){
     if(arg == NULL)
         cfg->max_content_length = DEFAULT_MAX_CONTENT_LENGTH;
@@ -270,6 +297,9 @@ mvproc_config *populate_config(mvp_pool *configPool){
         if(!error)
         error = set_max_content(configPool, cfg, 
             get_arg(begin, end, "maxPostSize", configPool));
+        if(!error)
+        error = set_user_vars(configPool, cfg, 
+            get_arg(begin, end, "userVars", configPool));
         if(error){
             init_error("Configuration error: %s\n", error);
             return NULL;
