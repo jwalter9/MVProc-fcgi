@@ -459,7 +459,7 @@ const char *scan_tpl_dir(mvp_pool *p, mvproc_config *cfg, const char *subdir){
                 sbdir[pos - 4] = '\0';
                 tpl = cfg->template_cache;
                 while(tpl != NULL && tpl->next != NULL) tpl = tpl->next;
-                fchrs = get_file_chars(p, mydir, sbdir);
+                fchrs = get_file_chars(p, cfg->template_dir, sbdir);
                 if(fchrs != NULL){
                     nxt = parse_template(p, fchrs);
                     nxt->filename = (char *)mvp_alloc(p, strlen(sbdir)+1);
